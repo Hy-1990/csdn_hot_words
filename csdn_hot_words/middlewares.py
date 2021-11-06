@@ -4,6 +4,11 @@
 # https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
 from scrapy import signals
+from scrapy.http import HtmlResponse
+from selenium.common.exceptions import TimeoutException
+import time
+
+from selenium.webdriver.chrome.options import Options
 
 # useful for handling different item types with a single interface
 from itemadapter import is_item, ItemAdapter
@@ -69,16 +74,30 @@ class CsdnHotWordsDownloaderMiddleware:
         return s
 
     def process_request(self, request, spider):
-        # Called for each request that goes through the downloader
-        # middleware.
-
-        # Must either:
-        # - return None: continue processing this request
-        # - or return a Response object
-        # - or return a Request object
-        # - or raise IgnoreRequest: process_exception() methods of
-        #   installed downloader middleware will be called
-        return None
+        js = '''
+                        let height = 0
+                let interval = setInterval(() => {
+                    window.scrollTo({
+                        top: height,
+                        behavior: "smooth"
+                    });
+                    height += 500
+                }, 500);
+                setTimeout(() => {
+                    clearInterval(interval)
+                }, 20000);
+            '''
+        try:
+            spider.browser.get(request.url)
+            spider.browser.execute_script(js)
+            time.sleep(20)
+            return HtmlResponse(url=spider.browser.current_url, body=spider.browser.page_source,
+                                encoding="utf-8", request=request)
+        except TimeoutException as e:
+            print('超时异常:{}'.format(e))
+            spider.browser.execute_script('window.stop()')
+        finally:
+            spider.browser.close()
 
     def process_response(self, request, response, spider):
         # Called with the response returned from the downloader.
